@@ -1,0 +1,29 @@
+---
+- hosts: test-server
+  become: yes
+
+  tasks:
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Install Kubernetes
+      apt:
+        name: kubeadm
+        state: present
+
+    - name: Initialize Kubernetes Cluster
+      command: kubeadm init
+
+    - name: Copy Kubernetes config file
+      command: mkdir -p $HOME/.kube && cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+
+    - name: Install Flannel network plugin
+      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+    - name: Enable Kubernetes on system startup
+      systemd:
+        name: kubelet
+        enabled: yes
+        state: started
