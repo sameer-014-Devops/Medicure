@@ -21,4 +21,4 @@ jobs:
         run: mvn checkstyle:checkstyle
 
       - name: Maven build
-        run: mv clean package
+        run: mvn clean package
