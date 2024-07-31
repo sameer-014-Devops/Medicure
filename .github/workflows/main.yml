@@ -19,3 +19,6 @@ jobs:
 
       - name: Checkstyle
         run: mvn checkstyle:checkstyle
+
+      - name: Maven build
+        run: mv clean package
