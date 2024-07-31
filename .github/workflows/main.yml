@@ -1,17 +1,18 @@
-name: basic testing
+name: Basic Testing
+
 on:
   push:
-    branching:
+    branches:
       - master
       - staging
+  workflow_dispatch:
 
-  workflow_dipatch:
 jobs:
-  Test and build:
+  Test_and_build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: action/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Maven test
         run: mvn test
