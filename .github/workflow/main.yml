@@ -5,6 +5,7 @@ on:
       - master
       - staging
 
+  workflow_dipatch:
 jobs:
   Test and build:
     runs-on: ubuntu-latest
