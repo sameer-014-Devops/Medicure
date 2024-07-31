@@ -1,0 +1,19 @@
+name: basic testing
+on:
+  push:
+    branching:
+      - master
+      - staging
+
+jobs:
+  Test and build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: action/checkout@v4
+
+      - name: Maven test
+        run: mvn test
+
+      - name: Checkstyle
+        run: mvn checkstyle:checkstyle
