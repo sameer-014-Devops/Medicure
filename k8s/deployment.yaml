@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healthcareproject-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: healthcareproject
+  template:
+    metadata:
+      labels:
+        app: healthcareproject
+    spec:
+      containers:
+        - name: healthcareproject
+          image: srinath7019/healthcareproject:1
+          ports:
+            - containerPort: 8082
