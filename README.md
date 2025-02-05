@@ -1,4 +1,4 @@
-# ************************** Medicure - Web Application *********************************
+# ********* Medicure - Web Application *********
 
 Medicure is a super specialty hospital based in New York, USA and provide world class treatment and surgery including Heart, Liver, Kidney transplants and first robotic surgery center. The chain is owned and managed by Global Health Limited.
 
