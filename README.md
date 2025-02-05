@@ -26,7 +26,7 @@ To implement Continuous Integration & Continuous Deployment using following tool
 
 Solution: 
 
-    • Using Terraform :-
+    • Using Terraform :- On AWS Cloud 
               • Creating New VPC
               • Creating 2 Subnets
               • Creating 5 Security Groups
@@ -36,7 +36,7 @@ Solution:
               • Creating 7 Instances
               • Associating Elastic Ips with instance
   
-    • Using Ansible :-
+    • Using Ansible :- On AWS Cloud Servers
               • Configuration of Jenkins Master
               • Configuration of Build Server
               • Configuration of Ansible Controller
