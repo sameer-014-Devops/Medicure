@@ -2,7 +2,7 @@
 
 # Automatically select the first JAR file in the directory
 Wrk_Dir="/opt/tomcat/webapps"
-JAR_FILE=$(ls "$Wrk_Dir"/financeme-*.jar 2>/dev/null | sort -V | tail -n 1)
+JAR_FILE=$(ls "$Wrk_Dir"/medicure-*.jar 2>/dev/null | sort -V | tail -n 1)
 PID_FILE="$Wrk_Dir/app.pid"
 
 # Check if a JAR file exists
