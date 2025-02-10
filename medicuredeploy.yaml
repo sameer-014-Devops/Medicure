@@ -18,7 +18,7 @@ spec:
       - name: skmirza-medicure-container
         image: sameer014/skmirza-medicure-img:latest
         ports:
-        - containerPort: 8082
+        - containerPort: 8081
 ---
 apiVersion: v1
 kind: Service
@@ -32,6 +32,6 @@ spec:
 
   type: NodePort
   ports:
-  - nodePort: 30015
-    port: 8082
-    targetPort: 8082
+  - nodePort: 30014
+    port: 8081
+    targetPort: 8081
