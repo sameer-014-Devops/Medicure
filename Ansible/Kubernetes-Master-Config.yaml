@@ -1,0 +1,138 @@
+# yaml file to configure the kubernetes Master using ansible
+---
+  - hosts: PM
+    gather_facts: no
+    become: yes
+    tasks:
+      - name: Update Package
+        shell: sudo apt update -y
+      - name: Installing and Configuring kubernetes
+        shell:
+          cmd: |
+            sudo hostnamectl set-hostname "kube-master"
+
+      - name: Turning off swap
+        shell:
+          cmd: |
+            sudo swapoff -a
+            sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+      - name: Installing the required packages
+        shell:
+          cmd: |
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl
+            sudo install -m 0755 -d /etc/apt/keyrings
+            sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            sudo chmod a+r /etc/apt/keyrings/docker.asc
+            echo \
+              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+              $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+
+      - name: Installing Docker
+        shell:
+          cmd: |
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+      - name: Configuring Docker
+        shell:
+          cmd: |
+            sudo modprobe overlay
+            sudo modprobe br_netfilter
+            cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+            overlay
+            br_netfilter
+            EOF
+
+      - name: Configuring kubernetes
+        shell:
+          cmd: |
+            sudo tee /etc/sysctl.d/kubernetes.conf<<EOF
+            net.bridge.bridge-nf-call-ip6tables = 1
+            net.bridge.bridge-nf-call-iptables = 1
+            net.ipv4.ip_forward = 1
+            EOF
+
+      - name: Configuring containerd
+        shell:
+          cmd: |
+            sudo sysctl --system
+            sudo mkdir -p /etc/containerd
+            sudo containerd config default | sudo tee /etc/containerd/config.toml
+
+      - name: Config containerd
+        shell: sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+
+      - name: Restarting containerd
+        shell: sudo systemctl restart containerd
+
+      - name: Installing pre-requisites dependencies
+        shell:
+          cmd: |
+            echo "Starting installation of pre-requisites"
+            sudo apt-get update
+            sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+      - name: Adding Kubernetes repository
+        shell:
+          cmd: |
+            sudo mkdir -p -m 755 /etc/apt/keyrings
+            echo "Downloading Kubernetes release key"
+            curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+            echo "Adding Kubernetes repository"
+            echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+      - name: Installing kubeadm, kubelet and kubectl
+        shell:
+          cmd: |
+            sudo apt-get update -y
+            sudo apt-get install -y kubelet kubeadm kubectl
+            sudo apt-mark hold kubelet kubeadm kubectl
+            sudo systemctl enable kubelet
+
+      - name: Pulling the required images
+        shell:
+          cmd: |
+            sudo kubeadm config images pull
+
+      - name: kubeadm initialization
+        shell:
+          cmd: |
+            sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+        register: kubeadm_init
+      - name: Printing the join command
+        debug:
+          msg: "{{ kubeadm_init.stdout_lines }}"
+
+      - name: Creating the .kube directory
+        shell:
+          cmd: |
+            mkdir -p $HOME/.kube
+            sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+            sudo chown $(id -u):$(id -g) $HOME/.kube/config
+            export KUBECONFIG=/etc/kubernetes/admin.conf
+      - name: Installing the flannel network
+        shell:
+          cmd: |
+            kubectl apply -f https://github.com/coreos/flannel/raw/master/Documentation/kube-flannel.yml
+            kubectl get nodes
+        register: flannel_install
+      - name: Printing the status
+        debug:
+          msg: "{{ flannel_install.stdout_lines }}"
+
+      - name: Giving kubectl access to the user
+        shell:
+          cmd: |
+            runuser -l skmirza -c 'mkdir -p $HOME/.kube && sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config && sudo chown $(id -u):$(id -g) $HOME/.kube/config'
+
+      - name: Verifying the access
+        shell:
+          cmd: |
+            runuser -l skmirza -c 'kubectl get nodes'
+        register: kubectl_access
+
+      - name: Printing the status
+        debug:
+          msg: "{{ kubectl_access.stdout_lines }}"

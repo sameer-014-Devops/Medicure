@@ -1,0 +1,82 @@
+# yaml file to configure the test server (tomcat server) using ansible
+---
+  - hosts: TCS
+    gather_facts: no
+    become: yes
+    tasks:
+      - name: Update Package
+        shell: sudo apt update -y
+      - name: Install Java
+        apt:
+          name: openjdk-17-jre
+          state: present
+      - name: Install Tomcat
+        shell:
+         cmd: |
+            wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.98/bin/apache-tomcat-9.0.98.tar.gz
+            tar -xvf apache-tomcat-9.0.98.tar.gz
+            rm -rf apache-tomcat-9.0.98.tar.gz
+            mv apache-tomcat-9.0.98 /opt/tomcat
+            chown -R skmirza:skmirza /opt/tomcat
+            chmod -R +x /opt/tomcat/bin/*.sh
+      - name: Creating a systemd service file for Tomcat
+        shell:
+          cmd: |
+            cat <<EOF > /etc/systemd/system/tomcat.service
+            [Unit]
+            Description=Apache Tomcat Web Application Container
+            After=network.target
+
+            [Service]
+            Type=forking
+            ExecStart=/opt/tomcat/bin/startup.sh
+            ExecStop=/opt/tomcat/bin/shutdown.sh
+            User=skmirza
+            Group=skmirza
+            Restart=always
+            RestartSec=10
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+      - name: Start and enable Tomcat service
+        systemd:
+          name: tomcat
+          state: started
+          enabled: yes
+          daemon_reload: yes
+      - name: Status of Tomcat service
+        shell: systemctl status tomcat
+        register: tomcat_status
+
+      - name: Installing Node Exporter
+        shell: |
+          wget https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
+          tar -zxvf node_exporter-1.8.2.linux-amd64.tar.gz
+          rm -rf node_exporter-1.8.2.linux-amd64.tar.gz
+          mv node_exporter-1.8.2.linux-amd64 /opt/node_exporter
+          chown -R skmirza:skmirza /opt/node_exporter
+          chmod +x /opt/node_exporter/node_exporter
+      - name: Creating a systemd service file for Node Exporter
+        shell:
+          cmd: |
+            cat <<EOF > /etc/systemd/system/node_exporter.service
+            [Unit]
+            Description=Node Exporter
+            After=network.target
+
+            [Service]
+            User=skmirza
+            Group=skmirza
+            Type=simple
+            ExecStart=/opt/node_exporter/node_exporter
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+      - name: Start and enable Node Exporter service
+        systemd:
+          name: node_exporter
+          state: started
+          enabled: yes
+          daemon_reload: yes

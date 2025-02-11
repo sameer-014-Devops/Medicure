@@ -1,0 +1,135 @@
+# yaml file to configure the kubernetes Worker using ansible
+---
+  - hosts: ProdWorkers
+    gather_facts: no
+    become: yes
+    tasks:
+      - name: Update Package
+        shell: sudo apt update -y
+      - name: Installing and Configuring kubernetes on Worker01
+        shell:
+          cmd: |
+            sudo hostnamectl set-hostname "kube-worker01"
+        when: inventory_hostname == "PW01"
+      - name: Installing and Configuring kubernetes on Worker02
+        shell:
+          cmd: |
+            sudo hostnamectl set-hostname "kube-worker02"
+        when: inventory_hostname == "PW02"
+
+      - name: Turning off swap
+        shell:
+          cmd: |
+            sudo swapoff -a
+            sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+      - name: Installing the required packages
+        shell:
+          cmd: |
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl
+            sudo install -m 0755 -d /etc/apt/keyrings
+            sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            sudo chmod a+r /etc/apt/keyrings/docker.asc
+            echo \
+              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+              $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+
+      - name: Installing Docker
+        shell:
+          cmd: |
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+      - name: Configuring Docker
+        shell:
+          cmd: |
+            sudo modprobe overlay
+            sudo modprobe br_netfilter
+            cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+            overlay
+            br_netfilter
+            EOF
+
+      - name: Configuring kubernetes
+        shell:
+          cmd: |
+            sudo tee /etc/sysctl.d/kubernetes.conf<<EOF
+            net.bridge.bridge-nf-call-ip6tables = 1
+            net.bridge.bridge-nf-call-iptables = 1
+            net.ipv4.ip_forward = 1
+            EOF
+
+      - name: Configuring containerd
+        shell:
+          cmd: |
+            sudo sysctl --system
+            sudo mkdir -p /etc/containerd
+            sudo containerd config default | sudo tee /etc/containerd/config.toml
+
+      - name: Config containerd
+        shell: sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+
+      - name: Restarting containerd
+        shell: sudo systemctl restart containerd
+
+      - name: Installing pre-requisites dependencies
+        shell:
+          cmd: |
+            echo "Starting installation of pre-requisites"
+            sudo apt-get update
+            sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+      - name: Adding Kubernetes repository
+        shell:
+          cmd: |
+            sudo mkdir -p -m 755 /etc/apt/keyrings
+            echo "Downloading Kubernetes release key"
+            curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+            echo "Adding Kubernetes repository"
+            echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+      - name: Installing kubeadm, kubelet and kubectl
+        shell:
+          cmd: |
+            sudo apt-get update -y
+            sudo apt-get install -y kubelet kubeadm kubectl
+            sudo apt-mark hold kubelet kubeadm kubectl
+            sudo systemctl enable kubelet
+      - name: Joining the worker nodes to the cluster
+        shell:
+          cmd: |
+            sudo kubeadm join 14.0.14.126:6443 --token 2mnsnt.wvlsxpk3yb720qvh \
+            --discovery-token-ca-cert-hash sha256:a813507316776e6d4fe07b006ad38f1cab84753dd0f6305d7f9bcb571c8e079c
+
+      - name: Installing Node Exporter
+        shell: |
+          sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
+          sudo tar -zxvf node_exporter-1.8.2.linux-amd64.tar.gz
+          sudo rm -rf node_exporter-1.8.2.linux-amd64.tar.gz
+          sudo mv node_exporter-1.8.2.linux-amd64 /opt/node_exporter
+          sudo chown -R skmirza:skmirza /opt/node_exporter
+          sudo chmod +x /opt/node_exporter/node_exporter
+      - name: Creating a systemd service file for Node Exporter
+        shell:
+          cmd: |
+            cat <<EOF > /etc/systemd/system/node_exporter.service
+            [Unit]
+            Description=Node Exporter
+            After=network.target
+
+            [Service]
+            User=skmirza
+            Group=skmirza
+            Type=simple
+            ExecStart=/opt/node_exporter/node_exporter
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+      - name: Start and enable Node Exporter service
+        systemd:
+          name: node_exporter
+          state: started
+          enabled: yes
+          daemon_reload: yes 
