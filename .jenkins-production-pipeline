@@ -18,14 +18,10 @@ NOTE: Make sure add the variables at node levels
 ********************************************************************************************************************************************************************************
 ********************************************************************************************************************************************************************************
 
-pipeline {
+pipeline{
     agent none
-
     parameters {
         string(name: 'new_ver', defaultValue: 'latest', description: 'Deploy Version from Test Pipeline')
-        booleanParam(name: 'Changes_Dockerfile', defaultValue: 'latest', description: 'Changes in Dockerfile')
-        booleanParam(name: 'Changes_Kubedeploy', defaultValue: 'latest', description: 'Changes in Kubedeploy.yaml')
-        booleanParam(name: 'Verify_User', defaultValue: 'latest', description: 'Verify by User')
     }
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhublogin')
@@ -38,11 +34,6 @@ pipeline {
         stage('Docker_Build') {
             agent {
                 label 'BN01'
-            }
-            when{
-                expression { 
-                    ((params.Verify_User == true) || (params.Changes_Dockerfile == true) || ((params.Changes_Dockerfile == true) && (params.Changes_Kubedeploy == true)))
-                }
             }
             steps {
                 echo '*********Building Docker Image*********'
@@ -180,20 +171,17 @@ pipeline {
                 }
             }
         }
-        stage('Deploy_Main'){
+        stage ('Deploy_Main'){
             agent {
-                label 'AM'
+                label 'AC'
             }
-            when {
-                expression { 
-                    ((Docker_Push == true) || (params.Changes_Kubedeploy == true) || ((Docker_Push == true) && (params.Changes_Kubedeploy == true)))
-                }
+            when{
+                expression { Docker_Push == true }
             }
             steps {
-                echo '*********Performing Deploy into Main Server*********'
+                echo 'Deploying the Docker Image to the Production Environment'
                 script {
-                    // Checking the *.yaml file in the Build Server if present delete it
-                    sh """ ssh $User_Name@$KubeM_Pvt_IP rm -rf /home/$User_Name/*.yaml """
+                    echo '*********Deploying the Docker Image to the Production Environment*********'
                     // Copy the *.yaml file to the Main Server using scp command
                     sh """ scp $User_Name@$Build01_Pvt_IP:$BN01_Path/*.yaml $User_Name@$KubeM_Pvt_IP:/home/$User_Name/ """
                     echo "**********Copyed yaml file to Main Server**********"
@@ -202,15 +190,15 @@ pipeline {
                     ).trim()
                     if (podExists) {
                         echo '**********Pod is already running, So Updating the Deployment**********'
-                        sh """ssh $User_Name@$KubeM_Pvt_IP kubectl apply -f *.yaml"""
-                        sleep 10
+                        sh """ssh $User_Name@$KubeM_Pvt_IP kubectl apply -f medicuredeploy.yaml"""
+                        sleep 5
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl set image deploy $Deploy_Name $Container_Name=$DOCKERHUB_CREDENTIALS_USR/$User_Name-$App_Name-img:${params.new_ver}"""
-                        sleep 15
+                        sleep 10
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl get pods -o wide"""
                     } else {
                         echo '**********Pod is not running, So Creating the Deployment**********'
-                        sh """ssh $User_Name@$KubeM_Pvt_IP kubectl apply -f *.yaml"""
-                        sleep 10
+                        sh """ssh $User_Name@$KubeM_Pvt_IP kubectl apply -f medicuredeploy.yaml"""
+                        sleep 5
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl get pods -o wide"""
                     } 
                     // if the pod status is errimagepull or pending, then it should rollout undo the deployment
@@ -224,7 +212,6 @@ pipeline {
                             break
                         }
                     }
-
                     if (rollback) {
                         echo '**********Pod Status is ErrImagePull or Pending, So Rolling Back the Deployment**********'
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl rollout undo deployment/${APP_NAME}"""
@@ -233,19 +220,25 @@ pipeline {
                     } else {
                         echo '**********All Pod Statuses are Running, So Deployment is SUCCESSFUL**********'
                     }
-
                     echo "**********Check The Deploy in Main Server**********"
-                    echo "http://${env.KubeW01_Pub_IP}:30015"
-                    echo "http://${env.KubeW02_Pub_IP}:30015"
+                    sleep 15
+                    echo "http://${env.KubeW01_Pub_IP}:30014"
+                    echo "http://${env.KubeW02_Pub_IP}:30014"
                     Deploy_Main = true
                 }
             }
-            post {
-                success {
-                    echo '*********Deploy to Production Main Server is SUCCESSFULL*********'
+            post{
+                success{
+                    script{
+                        echo '########## Deployment to the Production Environment is SUCCESSFUL ##########'
+                        cleanWs()
+                        deleteDir()
+                    }
                 }
-                failure {
-                    echo '*********Deploy to Production Main Server is FAILED*********'
+                failure{
+                    script{
+                        echo '########## Deployment to the Production Environment is FAILED ##########'
+                    }
                 }
             }
         }
