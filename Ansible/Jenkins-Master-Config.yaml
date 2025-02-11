@@ -1,0 +1,49 @@
+# yaml file to configure the Jenkins Master using ansible
+---
+ - hosts: JenM
+   gather_facts: no
+   become: yes
+   tasks:
+     - name: Update Package
+       shell: sudo apt update -y
+     - name: Install Java
+       apt:
+         name: openjdk-17-jre
+         state: present
+     - name: Verify Java installation
+       shell: java --version
+       register: java_version
+     - name: Print Java version
+       debug:
+         msg: "Java Version is: {{ java_version.stdout }}"
+     - name: Installing Jenkins
+       shell:
+         cmd: |
+          sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
+            https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+          echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
+            https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+            /etc/apt/sources.list.d/jenkins.list > /dev/null
+          sudo apt-get update -y
+          sudo apt-get install -y jenkins
+     - name: Verify Jenkins installation
+       shell: jenkins --version
+       register: jenkins_installation
+     - name: Start and enable Jenkins service
+       systemd:
+         name: jenkins
+         state: started
+         enabled: yes
+         daemon_reload: yes
+     - name: Get Jenkins Status
+       shell: systemctl status jenkins
+       register: jnekins_status
+     - name: Print Jenkins Status
+       debug:
+         msg: "{{ jnekins_status.stdout }}"
+     - name: Get Jenkins initial admin password
+       shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+       register: jenkins_password
+     - name: Print Jenkins initial admin password
+       debug:
+         msg: "Jenkins initial admin password: {{ jenkins_password.stdout }}"
