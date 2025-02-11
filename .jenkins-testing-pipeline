@@ -20,28 +20,21 @@ NOTE: Make sure add the variables at node levels
 
 pipeline {
     agent none
-
     environment {
         Code_Checkout = false
-        Pre_Build = false
-        Check_Changes = false
-        Changes_Pom = false
-        Changes_Dockerfile = false
-        Changes_Kubedeploy = false
-        Changes_Diff = false
         Maven_Build = false
         Deploy_Test = false
         Deploy_Verify = false
         Verify_User = false
     }
     stages {
-        stage('Get Version') {
+        stage ('Get_Version') {
             agent {
                 label 'BN01'
             }
             steps {
                 script {
-                    echo "The Previous Version is: ${env.Default_Ver}"
+                    echo "The Default Version is: ${env.Default_Ver}"
                     try {
                         timeout(time: 15, unit: 'SECONDS') {
                             // Prompt user to provide a new version number within 15 seconds
@@ -64,12 +57,11 @@ pipeline {
                 }
             }
         }
-        stage('Checkout') {
+        stage('SCM_Checkout') {
             agent {
                 label 'BN01'
             }
             steps {
-                deleteDir()
                 cleanWs()
                 echo '########## Checking out the code ##########'
                 git 'https://github.com/sameer-014-Devops/Medicure.git'
@@ -77,130 +69,20 @@ pipeline {
             post {
                 success {
                     script {
-                        echo '########## Code checkout is SUCCESSFUL ##########'
-                        def preBuild = currentBuild.getPreviousBuild()
-                        // Check if the previous build is not null and the result is SUCCESS
-                        if (preBuild != null && preBuild.result == 'SUCCESS') {
-                            Pre_Build = true
-                            echo '########## Previous Build is Not Null & Result is SUCCESSFUL ##########'
-                            echo '########## Checking the changes ##########'
-                            // Check if the previous build is not null and the result is ABORTED
-                        } else if (preBuild != null && preBuild.result == 'ABORTED') {
-                            Code_Checkout = true
-                            echo '########## Previous Build is Not Null & Result is ABORTED ##########'
-                            echo '########## No Checking the changes ##########'
-                            // Check if the previous build is not null and the result is UNSTABLE
-                        } else if (preBuild != null && preBuild.result == 'UNSTABLE') {
-                            Code_Checkout = true
-                            echo '########## Previous Build is Not Null & Result is UNSTABLE ##########'
-                            echo '########## No Checking the changes ##########'
-                            // Check if the previous build is not null and the result is FAILURE
-                        } else if (preBuild != null && preBuild.result == 'FAILURE') {
-                            Code_Checkout = true
-                            echo '########## Previous Build is Not Null & Result is FAILURE ##########'
-                            echo '########## No Checking the changes ##########'
-                            // Check if the previous build is not null and the result is NOT_BUILT
-                        } else if (preBuild != null && preBuild.result == 'NOT_BUILT') {
-                            Pre_Build = true
-                            echo '########## Previous Build is Not Null & Result is NOT_BUILT ##########'
-                            echo '########## Checking the changes ##########'
-                            // Check if the previous build is not null or The last build failed. A new build is in progress
-                        } else if (preBuild != null && preBuild.result == 'IN_PROGRESS') {
-                            Pre_Build = true
-                            echo '########## Previous Build is Not Null & Result is IN_PROGRESS ##########'
-                            echo '########## Checking the changes ##########'
-                        }
-                        else {
-                            echo '########## Previous Build is Null ##########'
-                            Code_Checkout = true
-                        }   
+                        echo '########## Code Checkout is SUCCESSFUL ##########'
+                        Code_Checkout = true
                     }
                 }
                 failure {
                     script {
-                        echo '########## Code checkout is FAILED ##########'
+                        echo '########## Code Checkout is FAILED ##########'
                     }
                 }
             }
         }
-        stage('Check Changes') {
+        stage('Maven_Build') {
             agent {
                 label 'BN01'
-            }
-            when {
-                expression { Pre_Build == true }
-            }
-            steps {
-                script {
-                    Code_Checkout = false
-                    // Check if changes are made outside the 'src' or 'bin' directories
-                    def changedFiles = sh(script: "git diff --name-only HEAD~1 HEAD", returnStdout: true).trim().split("\n")
-                    // Save to the environment for later use
-                    env.CHANGED_FILES = changedFiles.join(',')
-                    if (env.CHANGED_FILES.contains('src') || env.CHANGED_FILES.contains('bin')) {
-                        echo '########## Changes are made in the src or bin directories ##########'
-                        Check_Changes = true
-                        Code_Checkout = true
-                    } else if (env.CHANGED_FILES.contains('pom.xml')) {
-                        echo '########## No changes are made in the src or bin directories ##########'
-                        echo '########## Changes are made in the pom.xml file ##########'
-                        Changes_Pom = true
-                        Code_Checkout = true
-                    } else if (env.CHANGED_FILES.contains('Dockerfile')) {
-                        echo '########## No changes are made in the src or bin directories ##########'
-                        echo '########## Changes are made in the Dockerfile ##########'
-                        Changes_Dockerfile = true
-                        Code_Checkout = true
-                    } else if (env.CHANGED_FILES.contains('financemedeploy.yaml')) {
-                        echo '########## No changes are made in the src or bin directories ##########'
-                        echo '########## Changes are made in the financemedeploy.yaml file ##########'
-                        Changes_Kubedeploy = true
-                    } else {
-                        echo '########## No changes are made in the src or bin directories ##########'
-                        echo '########## No changes are made in the pom.xml, Dockerfile, or Kubedeploy.yaml file ##########'
-                        // taking user input to proceed with the pipeline or not, if yes then proceed with the pipeline, if no then abort the pipeline, if timeout then abort the pipeline
-                        try {
-                            timeout(time: 60, unit: 'SECONDS') {
-                                def userInput = input(
-                                    message: 'No Changes Found In pom.xml, Dockerfile, or Kubedeploy.yaml. Do You Want To Proceed With The Pipeline?',
-                                    ok: 'Submit',
-                                    parameters: [choice(choices: ['Y', 'N'], description: 'Do you want to proceed with the pipeline?', name: 'user_input')]
-                                )
-                                if (userInput == 'Y') {
-                                    echo 'User Has Confirmed To Proceed With The Pipeline'
-                                    Changes_Diff = true
-                                    Code_Checkout = true
-                                } else {
-                                    echo 'User Has Denied To Proceed With The Pipeline'
-                                    currentBuild.result = 'ABORTED'
-                                    error '************Pipeline Aborted by User************'
-                                }
-                            }
-                        } catch (hudson.AbortException e) {
-                            if (e.getMessage().contains("Timeout")) {
-                                echo 'User Did Not Provide Any Input Within The Timeout Period, Proceeding With Default Input (N)'
-                                currentBuild.result = 'ABORTED'
-                                error '************Pipeline Aborted************'
-                            } else {
-                                throw e
-                            }
-                        } catch (Exception e) {
-                            echo 'An unexpected error occurred, proceeding with default input (N)'
-                            currentBuild.result = 'ABORTED'
-                            error '************Pipeline Aborted************'
-                        }
-                    }
-                }
-            }
-        }
-        stage('Maven Build') {
-            agent {
-                label 'BN01'
-            }
-            when {
-                expression {
-                    ((Code_Checkout == true) || (Code_Checkout == true && Check_Changes == true) || (Code_Checkout == true && Changes_Pom == true) || (Code_Checkout == true && Changes_Dockerfile == true)|| (Code_Checkout == true && Changes_Diff == true))
-                }
             }
             steps {
                 echo '########## Building the code ##########'
@@ -213,58 +95,50 @@ pipeline {
             post {
                 success {
                     script {
+                        echo '########## Maven Build is SUCCESSFUL ##########'
                         Maven_Build = true
-                        echo '########## Maven build is SUCCESSFUL ##########'
                     }
                 }
                 failure {
                     script {
-                        echo '########## Maven build is FAILED ##########'
+                        echo '########## Maven Build is FAILED ##########'
                     }
                 }
             }
         }
         stage('Deploy_Test') {
             agent {
-                label 'AM'
-            }
-            when {
-                expression { Maven_Build == true }
+                label 'AC'
             }
             steps {
                 echo '########## Deploying the code to Test Server ##########'
                 script {
-                    // Copy the jar file to the test server by using scp command
-                    
-                    def fileExists1 = sh(script: """ssh $User_Name@$Test_Server_Pvt_IP ls $Test_Server_Path/*.sh || true""", returnStatus: true)
-                    if (fileExists1 == 0) {
-                        echo 'No existing sh file found in the Test Server...'
-                    } else {
-                        
+                    // Checking and removing the existing sh file in Test Server
+                    def fileExists1 = sh(script: """ssh $User_Name@$Test_Server_Pvt_IP ls $Test_Server_Path/*.sh || true""", returnStdout: true).trim()
+                    if (fileExists1) {
                         echo 'Existing sh file found in the Test Server. Removing the existing sh file...'
                         sh """ ssh $User_Name@$Test_Server_Pvt_IP "sh $Test_Server_Path/*.sh stop" """
                         sleep 3
                         sh """ssh $User_Name@$Test_Server_Pvt_IP rm -rf $Test_Server_Path/*.sh"""
+                    } else {
+                        echo 'No existing sh file found in the Test Server...'
                     }
-                    
-                    //checking and removing the existing jar file in test server
+                    // Checking and Removing the existing jar file in Test Server
                     def fileExists = sh(script: """ssh $User_Name@$Test_Server_Pvt_IP ls $Test_Server_Path/*.jar || true""", returnStatus: true)
                     if (fileExists == 0) {
-                        echo 'No existing jar file found in the Test Server...'
-                    } else {
-                        
                         echo 'Existing jar file found in the Test Server. Removing the existing jar file...'
                         sh """ssh $User_Name@$Test_Server_Pvt_IP rm -rf $Test_Server_Path/*.jar"""
+                    } else {
+                        echo 'No existing jar file found in the Test Server...'
                     }
 
                     echo '########## Deploying the code to Test Server ##########'
-                    // Copy the jar file and sh to the test server by using scp command
-                    sh """ scp $User_Name@$Build01_Pvt_IP:$BN01_Path/target/*.jar $User_Name@$Test_Server_Pvt_IP:$Test_Server_Path """
-                    sh """ scp $User_Name@$Build01_Pvt_IP:$BN01_Path/*.sh $User_Name@$Test_Server_Pvt_IP:$Test_Server_Path """
+                    // Copy the jar file and sh to the test server by using SCP
+                    sh """ scp $User_Name@$Build01_Pvt_IP:$BN01_Path/target/*.jar $User_Name@$Test_Server_Pvt_IP:$Test_Server_Path/ """
+                    sh """ scp $User_Name@$Build01_Pvt_IP:$BN01_Path/*.sh $User_Name@$Test_Server_Pvt_IP:$Test_Server_Path/ """
                     sh """ ssh $User_Name@$Test_Server_Pvt_IP chmod +x $Test_Server_Path/*.sh """
                     // Run the jar file in the test server in using .sh file
                     sh """ ssh $User_Name@$Test_Server_Pvt_IP "sh $Test_Server_Path/*.sh start" """
-                    
                 }
             }
             post {
@@ -293,7 +167,7 @@ pipeline {
                 //wait for 15 seconds before verifying the deployment
                 sleep 15
                 script {
-                    def response = sh(script: """curl -s -o /dev/null -w '%{http_code}'  http://$Test_Server_Pub_IP:8082""", returnStdout: true).trim()
+                    def response = sh(script: """curl -s -o /dev/null -w '%{http_code}'  http://$Test_Server_Pub_IP:8081""", returnStdout: true).trim()
                     if (response == '200') {
                         Deploy_Verify = true
                         echo '*********Test Deployment is SUCCESSFUL*********'
@@ -328,7 +202,7 @@ pipeline {
                 echo '***********Verifying By User***********'
                 
                 script{
-                    echo "The Application URL: http://$Test_Server_Pub_IP:8082"
+                    echo "The Application URL: http://$Test_Server_Pub_IP:8081"
                     // Prompt user input to verify the deployment by accessing the application URL, within 60 seconds timeout, and proceed based on the user input (Y/N), if not provided, proceed with 'Y' as default input, and if the input is 'N', then only abort the pipeline.
                     try {
                         timeout(time: 120, unit: 'SECONDS') {
@@ -377,37 +251,25 @@ pipeline {
                 }
             }
         }
-        stage ('Copy Files to Production Workspace'){
+        stage ('Copy_Files_To_Production_Workspace'){
             agent {
                 label 'BN01'
             }
-            when {
-                expression { 
-                    ((Verify_User == true) || (Changes_Dockerfile == true) || (Changes_Kubedeploy == true))
-                }
+            when{
+                expression { Verify_User == true }
             }
-            steps {
-                script {
-                    sh """mkdir -p $Prod_Workspace"""
-                    if (Changes_Kubedeploy == true){
-                        echo '########## financemedeploy.yaml Changes Found ##########'
-                        sh """cp -R *.yaml $Prod_Workspace"""
-                        echo '########## financemedeploy.yaml Copied to FinanceMe Production Workspace ##########'
-                        deleteDir()
-                        cleanWs()
-                    }else if ( Verify_User == true || Changes_Dockerfile == true){
-                        sh """cp -R Dockerfile *.yaml target $Prod_Workspace"""
-                        echo '**********Copied the Dockerfile, financemedeploy.yaml, and target files to the FinanceMe Production workspace**********'
-                        deleteDir()
-                        cleanWs()
-                    }
-                }
+            steps{
+                sh """mkdir -p $Prod_Workspace"""
+                sh """cp -R Dockerfile *.yaml target $Prod_Workspace"""
+                echo '**********Copied the Dockerfile, medicuredeploy.yaml, and target files to the Medicure Production workspace**********'
+                cleanWs()
+                deleteDir()
             }
         }
     }
     post {
         success {
-            build job: 'Medicure_Production_Pipeline', parameters: [string(name: 'new_ver', value: env.new_ver), booleanParam(name: 'Changes_Dockerfile', value: Changes_Dockerfile), booleanParam(name: 'Changes_Kubedeploy', value: Changes_Kubedeploy), booleanParam(name: 'Verify_User', value: Verify_User)]
+            build job: 'Medicure_Production_Pipeline', parameters: [string(name: 'new_ver', value: env.new_ver)]
             echo '########## Production Pipeline Triggered ##########'
         }
         failure {
