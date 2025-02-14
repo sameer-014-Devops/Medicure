@@ -250,9 +250,11 @@ pipeline{
                 expression { Deploy_Main == true }
             }
             steps{
+              script{
                 echo '**********Cleaning Medicure Production workspace**********'
                 cleanWs()
-                deleteDir()
+                rm -rf *
+              }
             }
         }
     }
