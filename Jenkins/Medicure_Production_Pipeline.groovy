@@ -193,12 +193,12 @@ pipeline{
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl apply -f medicuredeploy.yaml"""
                         sleep 5
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl set image deploy $Deploy_Name $Container_Name=$DOCKERHUB_CREDENTIALS_USR/$User_Name-$App_Name-img:${params.new_ver}"""
-                        sleep 10
+                        sleep 15
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl get pods -o wide"""
                     } else {
                         echo '**********Pod is not running, So Creating the Deployment**********'
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl apply -f medicuredeploy.yaml"""
-                        sleep 5
+                        sleep 15
                         sh """ssh $User_Name@$KubeM_Pvt_IP kubectl get pods -o wide"""
                     } 
                     // if the pod status is errimagepull or pending, then it should rollout undo the deployment
