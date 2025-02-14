@@ -253,7 +253,7 @@ pipeline{
               script{
                 echo '**********Cleaning Medicure Production workspace**********'
                 cleanWs()
-                sh "rm -rf *"
+                deleteDir()
               }
             }
         }
