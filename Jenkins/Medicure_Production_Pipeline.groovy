@@ -242,6 +242,19 @@ pipeline{
                 }
             }
         }
+        stage ('Cleaning_Production_Workspace'){
+            agent {
+                label 'BN01'
+            }
+            when{
+                expression { Deploy_Main == true }
+            }
+            steps{
+                echo '**********Cleaning Medicure Production workspace**********'
+                cleanWs()
+                deleteDir()
+            }
+        }
     }
     post {
         success {
